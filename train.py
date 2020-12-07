@@ -1,24 +1,14 @@
-#pylint: disable = redefined-outer-name, invalid-name
-
-# inbuilt lib imports:
 from typing import List, Dict
-import os
-import argparse
-import random
-import json
-
-# external lib imports:
-from tqdm import tqdm
-import numpy as np
-import tensorflow as tf
-from tensorflow.keras import models, optimizers
-
-# project imports
 from data import read_instances, save_vocabulary, build_vocabulary, \
                  load_vocabulary, index_instances, generate_batches, load_glove_embeddings
+import os
+from tensorflow.keras import models, optimizers
 from main_model import MainClassifier
+import numpy as np
+import tensorflow as tf
 from loss import cross_entropy_loss
-from util import load_pretrained_model
+from tqdm import tqdm
+import json
 
 
 def train(model: models.Model,
@@ -109,141 +99,68 @@ def train(model: models.Model,
     return {"model": model, "metrics": metrics}
 
 
-if __name__ == '__main__':
+train_data_path = 'data/train.jsonl'
+val_data_path = 'data/validate.jsonl'
+glove_path = 'data/glove.6B.100d.txt'
+MAX_NUM_TOKENS = 25
+GLOVE_COMMON_WORDS_PATH = os.path.join("data", "glove_common_words.txt")
+VOCAB_SIZE = 10000
+num_epochs = 10
+batch_size = 32
 
-    parser = argparse.ArgumentParser(description='Train Main/Probing Model')
+print("Reading training instances.")
+train_instances = read_instances(train_data_path, MAX_NUM_TOKENS)
+print("Reading validation instances.")
+validation_instances = read_instances(val_data_path, MAX_NUM_TOKENS)
 
-    # Setup common parser arguments for training of either models
-    base_parser = argparse.ArgumentParser(add_help=False)
-    base_parser.add_argument('train_data_file_path', type=str, help='training data file path')
-    base_parser.add_argument('validation_data_file_path', type=str, help='validation data file path')
-    base_parser.add_argument('--load-serialization-dir', type=str,
-                             help='if passed, model will be loaded from this serialization directory.')
-    base_parser.add_argument('--batch-size', type=int, default=64, help='batch size')
-    base_parser.add_argument('--num-epochs', type=int, default=20, help='max num epochs to train for')
-    base_parser.add_argument('--suffix-name', type=str, default="",
-                             help='optional model name suffix. can be used to prevent name conflict '
-                                  'in experiment output serialization directory')
+with open(GLOVE_COMMON_WORDS_PATH) as file:
+    glove_common_words = [line.strip() for line in file.readlines() if line.strip()]
+vocab_token_to_id, vocab_id_to_token = build_vocabulary(train_instances, VOCAB_SIZE,
+                                                        glove_common_words)
 
-    subparsers = parser.add_subparsers(title='train_models', dest='model_name')
+train_instances = index_instances(train_instances, vocab_token_to_id)
+validation_instances = index_instances(validation_instances, vocab_token_to_id)
 
-    # Setup parser arguments for main model
-    main_model_subparser = subparsers.add_parser("main", description='Train Main Model',
-                                                 parents=[base_parser])
-    main_model_subparser.add_argument('--seq2vec-choice', type=str, choices=("dan", "gru"),
-                                      help='choice of seq2vec. '
-                                      'Required if load_serialization_dir not passed.')
-    main_model_subparser.add_argument('--embedding-dim', type=int, help='embedding_dim '
-                                      'Required if load_serialization_dir not passed.')
-    main_model_subparser.add_argument('--num-layers', type=int, help='num layers. '
-                                      'Required if load_serialization_dir not passed.')
-    main_model_subparser.add_argument('--pretrained-embedding-file', type=str,
-                                      help='if passed, use glove embeddings to initialize. '
-                                      'the embedding matrix')
+embeddings = load_glove_embeddings(glove_path, 100, vocab_id_to_token)
+optimizer = optimizers.Adam()
 
-    # Setup parser arguments for probing model
-    probing_model_subparser = subparsers.add_parser("probing", description='Train Probing Model',
-                                                    parents=[base_parser])
-    probing_model_subparser.add_argument('--base-model-dir', type=str, required=True,
-                                         help='serialization_dir of the base model to probe on. '
-                                         'Required for probing with/without load_serialization_dir.')
-    probing_model_subparser.add_argument('--layer-num', type=int,
-                                         help='layer_num of pretrained representations '
-                                              'on which to probe a linear model')
+config = {
+    "vocab_size": min(VOCAB_SIZE, len(vocab_token_to_id)),
+    "embedding_dim": 100,
+    "filters": [4, 6, 8],
+    "out_channels": 100,
+    "drop_prob": 0.2,
+    "hidden_units": 200,
+    # "gru_hidden_size": 256,
+    "num_classes": 2}
 
-    args = parser.parse_args()
+classifier = MainClassifier(**config)
+classifier._embeddings.assign(tf.convert_to_tensor(embeddings))
 
-    # Show help message if subparser wasn't triggered.
-    if not args.model_name:
-        parser.print_help()
-        exit()
+config["type"] = "main"
+save_serialization_dir = os.path.join("serialization_dirs", 'main_model' + '_3_only_cnn')
+if not os.path.exists(save_serialization_dir):
+    os.makedirs(save_serialization_dir)
 
-    # Make sure required configs have been passed. Otherwise, raise exceptions with messages.
-    if args.model_name == "main":
-        configs_passed = args.seq2vec_choice and args.embedding_dim and args.num_layers
-        if not args.load_serialization_dir and not configs_passed:
-            raise Exception("To train main model, either pass load-serialization-dir "
-                            "or pass seq2vec-choice, embedding-dim and num-layers")
-    elif args.model_name == "probing":
-        configs_passed = args.base_model_dir and args.layer_num
-        if not args.load_serialization_dir and not args.layer_num:
-            raise Exception("To train probing model, either pass load-serialization-dir "
-                            "or pass layer-num and base-model-dir")
+training_output = train(classifier, optimizer, train_instances,
+                            validation_instances, num_epochs,
+                            batch_size, save_serialization_dir)
 
-    # Set numpy, tensorflow and python seeds for reproducibility.
-    tf.random.set_seed(1337)
-    np.random.seed(1337)
-    random.seed(13370)
+classifier = training_output["model"]
+metrics = training_output["metrics"]
 
-    # Set some constants
-    MAX_NUM_TOKENS = 250
-    VOCAB_SIZE = 10000
-    GLOVE_COMMON_WORDS_PATH = os.path.join("data", "glove_common_words.txt")
+# Save the used vocabulary
+vocab_path = os.path.join(save_serialization_dir, "vocab.txt")
+save_vocabulary(vocab_id_to_token, vocab_path)
 
-    print("Reading training instances.")
-    train_instances = read_instances(args.train_data_file_path, MAX_NUM_TOKENS)
-    print("Reading validation instances.")
-    validation_instances = read_instances(args.validation_data_file_path, MAX_NUM_TOKENS)
+# Save the used config
+config_path = os.path.join(save_serialization_dir, "config.json")
+with open(config_path, "w") as file:
+    json.dump(config, file)
 
-    if args.load_serialization_dir:
-        print(f"Ignoring the model arguments and loading the "
-              f"model from serialization_dir: {args.load_serialization_dir}")
+# Save the training metrics
+metrics_path = os.path.join(save_serialization_dir, "metrics.json")
+with open(metrics_path, "w") as file:
+    json.dump(metrics, file)
 
-        # Load Vocab
-        vocab_path = os.path.join(args.load_serialization_dir, "vocab.txt")
-        vocab_token_to_id, vocab_id_to_token = load_vocabulary(vocab_path)
-
-        # Load Model
-        classifier = load_pretrained_model(args.load_serialization_dir)
-    else:
-        # Build Vocabulary
-        with open(GLOVE_COMMON_WORDS_PATH) as file:
-            glove_common_words = [line.strip() for line in file.readlines() if line.strip()]
-        vocab_token_to_id, vocab_id_to_token = build_vocabulary(train_instances, VOCAB_SIZE,
-                                                                glove_common_words)
-
-        # Build Config and Model
-        if args.model_name == "main":
-            config = {"seq2vec_choice": args.seq2vec_choice,
-                      "vocab_size": min(VOCAB_SIZE, len(vocab_token_to_id)),
-                      "embedding_dim": args.embedding_dim,
-                      "num_layers": args.num_layers}
-            classifier = MainClassifier(**config)
-            config["type"] = "main"
-
-    train_instances = index_instances(train_instances, vocab_token_to_id)
-    validation_instances = index_instances(validation_instances, vocab_token_to_id)
-
-    if args.model_name == "main" and args.pretrained_embedding_file:
-        embeddings = load_glove_embeddings(args.pretrained_embedding_file,
-                                           args.embedding_dim,
-                                           vocab_id_to_token)
-        classifier._embeddings.assign(tf.convert_to_tensor(embeddings))
-
-    optimizer = optimizers.Adam()
-
-    save_serialization_dir = os.path.join("serialization_dirs", args.model_name + args.suffix_name)
-    if not os.path.exists(save_serialization_dir):
-        os.makedirs(save_serialization_dir)
-
-    training_output = train(classifier, optimizer, train_instances,
-                            validation_instances, args.num_epochs,
-                            args.batch_size, save_serialization_dir)
-    classifier = training_output["model"]
-    metrics = training_output["metrics"]
-
-    # Save the used vocabulary
-    vocab_path = os.path.join(save_serialization_dir, "vocab.txt")
-    save_vocabulary(vocab_id_to_token, vocab_path)
-
-    # Save the used config
-    config_path = os.path.join(save_serialization_dir, "config.json")
-    with open(config_path, "w") as file:
-        json.dump(config, file)
-
-    # Save the training metrics
-    metrics_path = os.path.join(save_serialization_dir, "metrics.json")
-    with open(metrics_path, "w") as file:
-        json.dump(metrics, file)
-
-    print(f"\nFinal model stored in serialization directory: {save_serialization_dir}")
+print(f"\nFinal model stored in serialization directory: {save_serialization_dir}")
