@@ -14,6 +14,7 @@ from tensorflow.keras import models
 from data import read_instances, load_vocabulary, index_instances, generate_batches
 from util import load_pretrained_model
 
+
 def predict(model: models.Model,
             instances: List[Dict],
             batch_size: int,

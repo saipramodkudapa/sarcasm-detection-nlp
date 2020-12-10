@@ -1,5 +1,5 @@
 from data import read_instances, ids_labels_from_instances, bert_index_instances
-from model import create_bert_cnn_model
+from model import create_bert_cnn_model, create_vanilla_bert_model
 
 
 import argparse
@@ -16,6 +16,7 @@ if __name__ == '__main__':
     parser.add_argument('--num-epochs', type=int, default=4, help='max num epochs to train for')
     parser.add_argument('--pretrained-bert-model', type=str, default='bert-base-uncased',
                         help='if passed, use glove embeddings to initialize the embedding matrix')
+    parser.add_argument('--model-choice', type=str, choices=("bert_cnn", "bert"), help='Choice of model')
 
     parser.add_argument('--experiment-name', type=str, default="default",
                         help='optional experiment name which determines where to store the model training outputs.')
@@ -36,14 +37,20 @@ if __name__ == '__main__':
     validation_instances = bert_index_instances(validation_instances)
     config = {
         "num_tokens": args.num_tokens,
-        "num_filters": 200,
-        "filter_size": 4,
-        "embedding_dim": 768,
         "nn_hidden_dim": args.nn_hidden_dim,
         "dropout_prob": args.dropout_prob}
 
-    model = create_bert_cnn_model(**config)
-    config["type"] = "BERT"
+    if args.model_choice == "bert":
+        model = create_vanilla_bert_model(**config)
+        config["type"] = "BERT"
+    elif args.model_choice == "bert_cnn":
+        config.update({"num_filters": 200, "filter_size": 4, "embedding_dim": 768})
+        model = create_bert_cnn_model(**config)
+        config["type"] = "BERT_CNN"
+    else:
+        model = create_vanilla_bert_model(**config)
+        config["type"] = "BERT"
+
     model.compile(tf.keras.optimizers.Adam(1e-5), loss='binary_crossentropy', metrics=['accuracy'])
     model.summary()
     train_ids, train_labels = ids_labels_from_instances(train_instances)

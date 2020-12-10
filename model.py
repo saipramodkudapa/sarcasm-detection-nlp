@@ -174,3 +174,17 @@ def create_bert_cnn_model(num_tokens: int, num_filters: int, filter_size: int, e
     output = layers.Dense(1, activation='sigmoid')(hidden_output)
     model = tf.keras.Model(inputs=[input_word_ids], outputs=output)
     return model
+
+
+def create_vanilla_bert_model(num_tokens: int, nn_hidden_dim: int, dropout_prob: float):
+    # define the encoder for bert model
+    bert_encoder = TFBertModel.from_pretrained('bert-base-uncased')
+
+    input_word_ids = tf.keras.Input(shape=(num_tokens,), dtype=tf.int32, name="input_word_ids")
+    bert_embedding = bert_encoder([input_word_ids])
+    bert_cls_tokens = layers.Lambda(lambda seq: seq[:, 0, :])(bert_embedding[0])
+    hidden_output = layers.Dense(nn_hidden_dim, activation='relu')(bert_cls_tokens)
+    hidden_output = layers.Dropout(dropout_prob)(hidden_output)
+    output = layers.Dense(1, activation='sigmoid')(hidden_output)
+    model = tf.keras.Model(inputs=[input_word_ids], outputs=output)
+    return model
