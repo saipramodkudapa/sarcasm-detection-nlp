@@ -4,6 +4,7 @@ mypy-extensions==0.4.2
 typing-extensions==3.7.4
 overrides==2.0
 spacy==2.2.1
+nltk==3.5
 numpy==1.17.2
 tensorboard==2.3.0
 tensorboardX==1.9

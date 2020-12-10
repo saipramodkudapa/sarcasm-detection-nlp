@@ -12,9 +12,10 @@ from transformers import BertTokenizer
 import numpy as np
 from tqdm import tqdm
 import spacy
-# from bs4 import BeautifulSoup
-# import nltk
-# from nltk.corpus import stopwords
+from bs4 import BeautifulSoup
+import nltk
+nltk.download('stopwords')
+from nltk.corpus import stopwords
 import tensorflow as tf
 
 nlp = spacy.load("en_core_web_sm", disable=['ner', 'tagger', 'parser', 'textcat'])
@@ -38,9 +39,8 @@ def read_instances(data_file_path: str,
         for line in tqdm(file.readlines()):
             instance = json.loads(line.strip())
             text = instance["text"]
-            #text = denoise_text(text)
+            text = clean_text(text)
             tokens = [token.text.lower() for token in nlp.tokenizer(text)][:max_allowed_num_tokens]
-            #
             instance["labels"] = instance.pop("label", None)
             instance["text_tokens"] = tokens
             instance.pop("text")
@@ -48,51 +48,18 @@ def read_instances(data_file_path: str,
     return instances
 
 
-def strip_html(text):
+# Removing the noise in text
+def clean_text(text):
     soup = BeautifulSoup(text, "html.parser")
-    return soup.get_text()
-
-
-def remove_special_chars(text):
-    return re.sub('[^a-zA-Z]', ' ', text)
-
-
-# Removing the square brackets
-def remove_between_square_brackets(text):
-    return re.sub('\[[^]]*\]', '', text)
-
-
-# Removing URL's
-def remove_between_square_brackets(text):
-    return re.sub(r'http\S+', '', text)
-
-
-# Removing the stopwords from text
-def remove_stopwords(text):
     stop = set(stopwords.words('english'))
     final_text = []
+    text = soup.get_text()
+    text = re.sub(r'http\S+', '', text)
+    text = re.sub('[^a-zA-Z]', ' ', text)
     for i in text.split():
         if i.strip().lower() not in stop:
             final_text.append(i.strip())
     return " ".join(final_text)
-
-
-# contract tokens
-# def contract_tokens(text):
-#     for word in text.split():
-#         if word.lower() in contractions:
-#             text = text.replace(word, contractions[word.lower()])
-#     return text
-
-
-# Removing the noisy text
-def denoise_text(text):
-    text = strip_html(text)
-    text = remove_between_square_brackets(text)
-    text = remove_special_chars(text)
-    text = remove_stopwords(text)
-    # text = contract_tokens(text)
-    return text
 
 
 def build_vocabulary(instances: List[Dict],
