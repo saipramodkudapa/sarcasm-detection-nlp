@@ -39,7 +39,7 @@ def read_instances(data_file_path: str,
         for line in tqdm(file.readlines()):
             instance = json.loads(line.strip())
             text = instance["text"]
-            text = clean_text(text)
+            # text = clean_text(text)
             tokens = [token.text.lower() for token in nlp.tokenizer(text)][:max_allowed_num_tokens]
             instance["labels"] = instance.pop("label", None)
             instance["text_tokens"] = tokens

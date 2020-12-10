@@ -14,13 +14,11 @@ class baseCNNmodel(models.Model):
     def __init__(self,
                  embedding_dim: int,
                  filters: List[int],
-                 out_channels: int,
-                 max_tokens: int
+                 out_channels: int
                  ):
       super(baseCNNmodel, self).__init__()
 
       self.filters = filters
-      self.max_tokens = max_tokens
       self.out_channels = out_channels
       self.conv1 = layers.Convolution2D(filters=out_channels, kernel_size=[filters[0], embedding_dim], activation='relu')
       self.conv2 = layers.Convolution2D(filters=out_channels, kernel_size=[filters[1], embedding_dim], activation='relu')
@@ -29,17 +27,18 @@ class baseCNNmodel(models.Model):
     def call(self,
              conv_input: tf.Tensor):
 
+        _, max_tokens, _, _ = conv_input.shape
         conv1_output = self.conv1(conv_input)
 
-        max_pooled_output_1 = tf.nn.max_pool(conv1_output, ksize=[1, self.max_tokens - (self.filters[0] - 1), 1, 1],
+        max_pooled_output_1 = tf.nn.max_pool(conv1_output, ksize=[1, max_tokens - (self.filters[0] - 1), 1, 1],
                                              strides=[1, 1, 1, 1], padding='VALID')
 
         conv2_output = self.conv2(conv_input)
-        max_pooled_output_2 = tf.nn.max_pool(conv2_output, ksize=[1, self.max_tokens - (self.filters[1] - 1), 1, 1],
+        max_pooled_output_2 = tf.nn.max_pool(conv2_output, ksize=[1, max_tokens - (self.filters[1] - 1), 1, 1],
                                              strides=[1, 1, 1, 1], padding='VALID')
 
         conv3_output = self.conv3(conv_input)
-        max_pooled_output_3 = tf.nn.max_pool(conv3_output, ksize=[1, self.max_tokens - (self.filters[2] - 1), 1, 1],
+        max_pooled_output_3 = tf.nn.max_pool(conv3_output, ksize=[1, max_tokens - (self.filters[2] - 1), 1, 1],
                                              strides=[1, 1, 1, 1], padding='VALID')
 
         cnn_output = tf.concat([max_pooled_output_1, max_pooled_output_2, max_pooled_output_3], -1)
@@ -56,13 +55,12 @@ class onlyCNNmodel(models.Model):
                  filters: List[int],
                  out_channels: int,
                  drop_prob: float,
-                 max_tokens: int,
                  nn_hidden_dim: int,
                  num_classes: int = 2
                  ):
         super(onlyCNNmodel, self).__init__()
 
-        self._baseCNN = baseCNNmodel(embedding_dim, filters, out_channels, max_tokens)
+        self._baseCNN = baseCNNmodel(embedding_dim, filters, out_channels)
 
         self.embedding_dim = embedding_dim
         self._embeddings = tf.Variable(tf.random.normal((vocab_size, embedding_dim)), trainable=True)

@@ -25,6 +25,7 @@ def evaluate(gold_data_path: str, prediction_data_path: str) -> float:
     total_count = len(predicted_labels)
     return correct_count / total_count
 
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Evaluate classification predictions.')

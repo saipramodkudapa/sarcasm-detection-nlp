@@ -26,9 +26,17 @@ def load_pretrained_model(serialization_dir: str) -> models.Model:
 
     # Load Model
     model_name = config.pop("type")
-    if model_name == "main":
-        from main_model import MainClassifier # To prevent circular imports
-        model = MainClassifier(**config)
+    if model_name == "CNN":
+        # To prevent circular imports
+        from model import onlyCNNmodel
+        model = onlyCNNmodel(**config)
         model.load_weights(model_path)
-
+    elif model_name == "CNN_BiGRU":
+        from model import CNNandAttentiveBiGRUmodel
+        model = CNNandAttentiveBiGRUmodel(**config)
+        model.load_weights(model_path)
+    else:
+        from model import onlyCNNmodel
+        model = onlyCNNmodel(**config)
+        model.load_weights(model_path)
     return model
