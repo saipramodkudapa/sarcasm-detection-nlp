@@ -108,7 +108,8 @@ def train(model: models.Model,
                "validation_loss": float(average_validation_loss),
                "training_accuracy": float(training_accuracy),
                "best_epoch_validation_accuracy": float(best_epoch_validation_accuracy),
-               "best_epoch_validation_loss": float(best_epoch_validation_loss)
+               "best_epoch_validation_loss": float(best_epoch_validation_loss),
+               "epoch_validation_F1_score": round(float(f1), 4)
                }
 
     print("Best epoch validation accuracy: %.4f, validation loss: %.4f"

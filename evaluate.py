@@ -2,9 +2,10 @@
 # inbuilt lib imports:
 import json
 import argparse
+from sklearn.metrics import f1_score
 
 
-def evaluate(gold_data_path: str, prediction_data_path: str) -> float:
+def evaluate(gold_data_path: str, prediction_data_path: str):
     """
     Evaluates accuracy of label predictions in ``prediction_data_path``
     based on gold labels in ``gold_data_path``.
@@ -22,8 +23,10 @@ def evaluate(gold_data_path: str, prediction_data_path: str) -> float:
 
     correct_count = sum([1.0 if predicted_label == gold_label else 0.0
                          for predicted_label, gold_label in zip(predicted_labels, gold_labels)])
+    f1 = f1_score(gold_labels, predicted_labels)
     total_count = len(predicted_labels)
-    return correct_count / total_count
+    _accuracy = correct_count / total_count
+    return _accuracy, f1
 
 
 if __name__ == '__main__':
@@ -34,5 +37,6 @@ if __name__ == '__main__':
                         help='predictions data file path.')
 
     args = parser.parse_args()
-    accuracy = evaluate(args.gold_data_path, args.prediction_data_path)
+    accuracy, f1 = evaluate(args.gold_data_path, args.prediction_data_path)
     print(f"Accuracy: {round(accuracy, 2)}")
+    print(f"F1 score: {round(f1, 2)}")
