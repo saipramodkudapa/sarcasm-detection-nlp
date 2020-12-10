@@ -44,7 +44,8 @@ def read_instances(data_file_path: str,
             instance["labels"] = instance.pop("label", None)
             instance["text_tokens"] = tokens
             instance.pop("text")
-            instances.append(instance)
+            if tokens:
+                instances.append(instance)
     return instances
 
 
