@@ -1,14 +1,17 @@
 from typing import List, Dict
 from data import read_instances, save_vocabulary, build_vocabulary, \
-                 load_vocabulary, index_instances, generate_batches, load_glove_embeddings
+                 load_vocabulary, index_instances, generate_batches, load_glove_embeddings, \
+                 bert_index_instances
 import os
 from tensorflow.keras import models, optimizers
-from main_model import MainClassifier
+from model import onlyCNNmodel, CNNandAttentiveBiGRUmodel
 import numpy as np
 import tensorflow as tf
 from loss import cross_entropy_loss
 from tqdm import tqdm
 import json
+import argparse
+from sklearn.metrics import f1_score
 
 
 def train(model: models.Model,
@@ -35,6 +38,7 @@ def train(model: models.Model,
     tensorboard_writer = tf.summary.create_file_writer(tensorboard_logs_path)
     best_epoch_validation_accuracy = float("-inf")
     best_epoch_validation_loss = float("inf")
+    best_epoch_F1_score = float("inf")
     for epoch in range(num_epochs):
         print(f"\nEpoch {epoch}")
 
@@ -45,6 +49,13 @@ def train(model: models.Model,
             with tf.GradientTape() as tape:
                 logits = model(**batch_inputs, training=True)["logits"]
                 loss_value = cross_entropy_loss(logits, batch_labels)
+                ### Regularisation
+                regularization_lambda = 1e-4
+                parameters = model.trainable_variables
+                l2_norm = tf.add_n([ tf.nn.l2_loss(each) for each in parameters ])
+                regularization = 2 * regularization_lambda * l2_norm
+
+                loss_value += regularization
                 grads = tape.gradient(loss_value, model.trainable_variables)
             optimizer.apply_gradients(zip(grads, model.trainable_variables))
             total_training_loss += loss_value
@@ -59,6 +70,7 @@ def train(model: models.Model,
 
         total_validation_loss = 0
         total_correct_predictions, total_predictions = 0, 0
+        total_preds, total_labels = [], []
         generator_tqdm = tqdm(list(zip(validation_batches, validation_batch_labels)))
         for index, (batch_inputs, batch_labels) in enumerate(generator_tqdm):
             logits = model(**batch_inputs, training=False)["logits"]
@@ -67,16 +79,21 @@ def train(model: models.Model,
             batch_predictions = np.argmax(tf.nn.softmax(logits, axis=-1).numpy(), axis=-1)
             total_correct_predictions += (batch_predictions == batch_labels).sum()
             total_predictions += batch_labels.shape[0]
+            total_preds.extend(batch_predictions)
+            total_labels.extend(batch_labels)
             description = ("Average validation loss: %.2f Accuracy: %.2f "
                            % (total_validation_loss/(index+1), total_correct_predictions/total_predictions))
             generator_tqdm.set_description(description, refresh=False)
         average_validation_loss = total_validation_loss / len(validation_batches)
         validation_accuracy = total_correct_predictions/total_predictions
 
+        f1 = f1_score(total_labels, total_preds)
+        print(f"Validation F1 score: {round(float(f1), 4)}")
+
         if validation_accuracy > best_epoch_validation_accuracy:
             print("Model with best validation accuracy so far: %.2f. Saving the model."
                   % (validation_accuracy))
-            classifier.save_weights(os.path.join(serialization_dir, f'model.ckpt'))
+            model.save_weights(os.path.join(serialization_dir, f'model.ckpt'))
             best_epoch_validation_loss = average_validation_loss
             best_epoch_validation_accuracy = validation_accuracy
 
@@ -91,7 +108,8 @@ def train(model: models.Model,
                "validation_loss": float(average_validation_loss),
                "training_accuracy": float(training_accuracy),
                "best_epoch_validation_accuracy": float(best_epoch_validation_accuracy),
-               "best_epoch_validation_loss": float(best_epoch_validation_loss)}
+               "best_epoch_validation_loss": float(best_epoch_validation_loss)
+               }
 
     print("Best epoch validation accuracy: %.4f, validation loss: %.4f"
           %(best_epoch_validation_accuracy, best_epoch_validation_loss))
@@ -99,68 +117,93 @@ def train(model: models.Model,
     return {"model": model, "metrics": metrics}
 
 
-train_data_path = 'data/train.jsonl'
-val_data_path = 'data/validate.jsonl'
-glove_path = 'data/glove.6B.100d.txt'
-MAX_NUM_TOKENS = 25
-GLOVE_COMMON_WORDS_PATH = os.path.join("data", "glove_common_words.txt")
-VOCAB_SIZE = 10000
-num_epochs = 10
-batch_size = 32
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Train Model')
 
-print("Reading training instances.")
-train_instances = read_instances(train_data_path, MAX_NUM_TOKENS)
-print("Reading validation instances.")
-validation_instances = read_instances(val_data_path, MAX_NUM_TOKENS)
+    parser.add_argument('train_data_file_path', type=str, help='training data file path')
+    parser.add_argument('validation_data_file_path', type=str, help='validation data file path')
+    parser.add_argument('--batch-size', type=int, default=32, help='batch size')
+    parser.add_argument('--num-epochs', type=int, default=10, help='max num epochs to train for')
+    parser.add_argument('--pretrained-embedding-file', type=str,
+                        help='if passed, use glove embeddings to initialize the embedding matrix')
 
-with open(GLOVE_COMMON_WORDS_PATH) as file:
-    glove_common_words = [line.strip() for line in file.readlines() if line.strip()]
-vocab_token_to_id, vocab_id_to_token = build_vocabulary(train_instances, VOCAB_SIZE,
-                                                        glove_common_words)
+    parser.add_argument('--model-choice', type=str, choices=("cnn", "cnn_gru", "bert"),
+                        help='Choice of model')
 
-train_instances = index_instances(train_instances, vocab_token_to_id)
-validation_instances = index_instances(validation_instances, vocab_token_to_id)
+    parser.add_argument('--experiment-name', type=str, default="default",
+                        help='optional experiment name which determines where to store the model training outputs.')
 
-embeddings = load_glove_embeddings(glove_path, 100, vocab_id_to_token)
-optimizer = optimizers.Adam()
+    parser.add_argument('--num-tokens', type=int, help='num_tokens ', default=25)
+    parser.add_argument('--nn-hidden-dim', type=int, help='hidden_dim of fully connected neural network', default=100)
+    parser.add_argument('--embedding-dim', type=int, help='embedding_dim of word embeddings', default=100)
+    parser.add_argument('--gru-output-dim', type=int, help='Output dimension of GRU layer', default=100)
+    parser.add_argument('--dropout-prob', type=float, help="dropout rate", default=0.2)
 
-config = {
-    "vocab_size": min(VOCAB_SIZE, len(vocab_token_to_id)),
-    "embedding_dim": 100,
-    "filters": [4, 6, 8],
-    "out_channels": 100,
-    "drop_prob": 0.2,
-    "hidden_units": 200,
-    # "gru_hidden_size": 256,
-    "num_classes": 2}
+    args = parser.parse_args()
 
-classifier = MainClassifier(**config)
-classifier._embeddings.assign(tf.convert_to_tensor(embeddings))
+    # Setting constants
+    MAX_NUM_TOKENS = 25
+    VOCAB_SIZE = 10000
+    GLOVE_COMMON_WORDS_PATH = os.path.join("data", "glove_common_words.txt")
 
-config["type"] = "main"
-save_serialization_dir = os.path.join("serialization_dirs", 'main_model' + '_3_only_cnn')
-if not os.path.exists(save_serialization_dir):
-    os.makedirs(save_serialization_dir)
+    print("Reading training instances.")
+    train_instances = read_instances(args.train_data_file_path, MAX_NUM_TOKENS)
+    print("Reading validation instances.")
+    validation_instances = read_instances(args.validation_data_file_path, MAX_NUM_TOKENS)
 
-training_output = train(classifier, optimizer, train_instances,
-                            validation_instances, num_epochs,
-                            batch_size, save_serialization_dir)
+    with open(GLOVE_COMMON_WORDS_PATH) as file:
+        glove_common_words = [line.strip() for line in file.readlines() if line.strip()]
 
-classifier = training_output["model"]
-metrics = training_output["metrics"]
+    vocab_token_to_id, vocab_id_to_token = build_vocabulary(train_instances, VOCAB_SIZE, glove_common_words)
 
-# Save the used vocabulary
-vocab_path = os.path.join(save_serialization_dir, "vocab.txt")
-save_vocabulary(vocab_id_to_token, vocab_path)
+    train_instances = index_instances(train_instances, vocab_token_to_id)
+    validation_instances = index_instances(validation_instances, vocab_token_to_id)
+    config = {
+      "vocab_size": min(VOCAB_SIZE, len(vocab_token_to_id)),
+      "embedding_dim": args.embedding_dim,
+      "filters": [4, 6, 8],
+      "out_channels": 100,
+      "drop_prob": args.dropout_prob,
+      "max_tokens": args.num_tokens,
+      "nn_hidden_dim": args.nn_hidden_dim,
+      "num_classes": 2}
 
-# Save the used config
-config_path = os.path.join(save_serialization_dir, "config.json")
-with open(config_path, "w") as file:
-    json.dump(config, file)
+    if args.model_choice == "cnn":
+        model = onlyCNNmodel(**config)
+        config["type"] = "CNN"
+    elif args.model_choice == "cnn_gru":
+        config["gru_hidden_dim"] = args.gru_output_dim
+        model = CNNandAttentiveBiGRUmodel(**config)
+        config["type"] = "CNN_BiGRU"
 
-# Save the training metrics
-metrics_path = os.path.join(save_serialization_dir, "metrics.json")
-with open(metrics_path, "w") as file:
-    json.dump(metrics, file)
+    if args.pretrained_embedding_file:
+        embeddings = load_glove_embeddings(args.pretrained_embedding_file, args.embedding_dim, vocab_id_to_token)
+        model._embeddings.assign(tf.convert_to_tensor(embeddings))
 
-print(f"\nFinal model stored in serialization directory: {save_serialization_dir}")
+    optimizer = optimizers.Adam()
+
+    save_serialization_dir = os.path.join("serialization_dirs", args.experiment_name )
+    if not os.path.exists(save_serialization_dir):
+      os.makedirs(save_serialization_dir)
+
+    training_output = train(model, optimizer, train_instances,
+                              validation_instances, args.num_epochs,
+                              args.batch_size, save_serialization_dir)
+    classifier = training_output["model"]
+    metrics = training_output["metrics"]
+
+    # Save the used vocabulary
+    vocab_path = os.path.join(save_serialization_dir, "vocab.txt")
+    save_vocabulary(vocab_id_to_token, vocab_path)
+
+    # Save the used config
+    config_path = os.path.join(save_serialization_dir, "config.json")
+    with open(config_path, "w") as file:
+      json.dump(config, file)
+
+    # Save the training metrics
+    metrics_path = os.path.join(save_serialization_dir, "metrics.txt")
+    with open(metrics_path, "w") as file:
+      json.dump(metrics, file)
+
+    print(f"\nFinal model stored in serialization directory: {save_serialization_dir}")

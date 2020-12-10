@@ -8,12 +8,14 @@ import re
 # from util import stop, contractions
 
 # external lib imports:
+from transformers import BertTokenizer
 import numpy as np
 from tqdm import tqdm
 import spacy
 # from bs4 import BeautifulSoup
 # import nltk
 # from nltk.corpus import stopwords
+import tensorflow as tf
 
 nlp = spacy.load("en_core_web_sm", disable=['ner', 'tagger', 'parser', 'textcat'])
 
@@ -224,6 +226,34 @@ def index_instances(instances: List[Dict], token_to_id: Dict) -> List[Dict]:
         instance.pop("text_tokens")
     return instances
 
+def bert_index_instances(instances: List[Dict]) -> List[Dict]:
+    """
+    bert indexing for training instances
+    prepares the instances to be tensorized.
+    """
+    PRE_TRAINED_MODEL_NAME = 'bert-base-uncased'
+    tokenizer = BertTokenizer.from_pretrained(PRE_TRAINED_MODEL_NAME, do_lower_case=True)
+    for instance in instances:
+        sentence = instance["text_tokens"]
+        encoding = tokenizer.encode_plus(
+            sentence,
+            max_length=16,
+            truncation=True,
+            add_special_tokens=True,
+            return_token_type_ids=False,
+            pad_to_max_length=True,
+            return_attention_mask=False)
+        instance["text_tokens_ids"] = encoding['input_ids']
+        instance.pop("text_tokens")
+    return instances
+
+def ids_labels_from_instances(instances: List[Dict]) -> List[Dict]:
+    labels = []
+    ids = []
+    for instance in instances:
+        ids.append(instance['text_tokens_ids'])
+        labels.append(instance['labels'])
+    return (tf.convert_to_tensor(ids), tf.convert_to_tensor(labels))
 
 def generate_batches(instances: List[Dict], batch_size) -> List[Dict[str, np.ndarray]]:
     """
