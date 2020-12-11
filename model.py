@@ -94,7 +94,6 @@ class onlyCNNmodel(models.Model):
         return {"logits": logits}        
 
 
-
 class CNNandAttentiveBiGRUmodel(models.Model):
     def __init__(self,
                  vocab_size: int,

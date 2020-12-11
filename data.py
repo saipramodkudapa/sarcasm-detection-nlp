@@ -53,10 +53,10 @@ def read_instances(data_file_path: str,
 def clean_text(text):
     soup = BeautifulSoup(text, "html.parser")
     stop = set(stopwords.words('english'))
-    final_text = []
     text = soup.get_text()
     text = re.sub(r'http\S+', '', text)
     text = re.sub('[^a-zA-Z]', ' ', text)
+    final_text = []
     for i in text.split():
         if i.strip().lower() not in stop:
             final_text.append(i.strip())

@@ -11,27 +11,37 @@ import tensorflow as tf
 from tensorflow.keras import models
 
 # project imports
-from data import read_instances, load_vocabulary, index_instances, generate_batches
+from data import read_instances, load_vocabulary, index_instances, generate_batches, bert_index_instances, \
+    ids_labels_from_instances
 from util import load_pretrained_model
 
 
 def predict(model: models.Model,
             instances: List[Dict],
             batch_size: int,
+            is_bert,
             save_to_file: str = None) -> List[int]:
     """
     Makes predictions using model on instances and saves them in save_to_file.
     """
-    batches = generate_batches(instances, batch_size)
-    predicted_labels = []
+    if is_bert:
+        test_ids, test_labels = ids_labels_from_instances(instances)
+        test_preds = model.predict(test_ids, batch_size=batch_size)
+        all_predicted_labels = tf.cast(test_preds >= 0.5, tf.int32)
+        all_predicted_labels = tf.reshape(all_predicted_labels, -1)
+        all_predicted_labels = list(all_predicted_labels.numpy())
 
-    all_predicted_labels = []
-    print("Making predictions")
-    for batch_inputs in tqdm(batches):
-        batch_inputs.pop("labels")
-        logits = model(**batch_inputs, training=False)["logits"]
-        predicted_labels = list(tf.argmax(logits, axis=-1).numpy())
-        all_predicted_labels += predicted_labels
+    else:
+        batches = generate_batches(instances, batch_size)
+        predicted_labels = []
+
+        all_predicted_labels = []
+        print("Making predictions")
+        for batch_inputs in tqdm(batches):
+            batch_inputs.pop("labels")
+            logits = model(**batch_inputs, training=False)["logits"]
+            predicted_labels = list(tf.argmax(logits, axis=-1).numpy())
+            all_predicted_labels += predicted_labels
 
     if save_to_file:
         print(f"Saving predictions to filepath: {save_to_file}")
@@ -61,17 +71,21 @@ if __name__ == '__main__':
 
     instances = read_instances(args.data_file_path, MAX_NUM_TOKENS)
 
-    vocabulary_path = os.path.join(args.load_serialization_dir, "vocab.txt")
-    vocab_token_to_id, _ = load_vocabulary(vocabulary_path)
-
-    instances = index_instances(instances, vocab_token_to_id)
+    # Load Model
+    classifier = load_pretrained_model(args.load_serialization_dir)
 
     # Load Config
     config_path = os.path.join(args.load_serialization_dir, "config.json")
     with open(config_path, "r") as file:
         config = json.load(file)
 
-    # Load Model
-    classifier = load_pretrained_model(args.load_serialization_dir)
+    is_bert = False
+    if config['type'] == 'cnn' or config['type'] == 'cnn_gru':
+        vocabulary_path = os.path.join(args.load_serialization_dir, "vocab.txt")
+        vocab_token_to_id, _ = load_vocabulary(vocabulary_path)
+        instances = index_instances(instances, vocab_token_to_id)
+    else:
+        instances = bert_index_instances(instances)
+        is_bert = True
 
-    predict(classifier, instances, args.batch_size, args.predictions_file)
+    predict(classifier, instances, args.batch_size, is_bert, args.predictions_file)

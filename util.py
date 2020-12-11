@@ -35,6 +35,14 @@ def load_pretrained_model(serialization_dir: str) -> models.Model:
         from model import CNNandAttentiveBiGRUmodel
         model = CNNandAttentiveBiGRUmodel(**config)
         model.load_weights(model_path)
+    elif model_name == "BERT_CNN":
+        from model import create_bert_cnn_model
+        model = create_bert_cnn_model(**config)
+        model.load_weights(model_path)
+    elif model_name == "BERT":
+        from model import create_vanilla_bert_model
+        model = create_vanilla_bert_model(**config)
+        model.load_weights(model_path)
     else:
         from model import onlyCNNmodel
         model = onlyCNNmodel(**config)

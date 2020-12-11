@@ -5,25 +5,25 @@ from model import create_bert_cnn_model, create_vanilla_bert_model
 import argparse
 import os
 import tensorflow as tf
+import json
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train Model')
 
-    parser.add_argument('--train_data_file_path', type=str,  default='data/train.jsonl', help='training data file path')
-    parser.add_argument('--validation_data_file_path', type=str, default='data/validate.jsonl', help='validation data file path')
+    parser.add_argument('train_data_file_path', type=str,  default='data/train.jsonl', help='training data file path')
+    parser.add_argument('validation_data_file_path', type=str, default='data/validate.jsonl', help='validation data file path')
     parser.add_argument('--batch-size', type=int, default=32, help='batch size')
     parser.add_argument('--num-epochs', type=int, default=4, help='max num epochs to train for')
     parser.add_argument('--pretrained-bert-model', type=str, default='bert-base-uncased',
                         help='if passed, use glove embeddings to initialize the embedding matrix')
     parser.add_argument('--model-choice', type=str, choices=("bert_cnn", "bert"), help='Choice of model')
 
-    parser.add_argument('--experiment-name', type=str, default="default",
+    parser.add_argument('--experiment-name', type=str, default="only_bert",
                         help='optional experiment name which determines where to store the model training outputs.')
 
     parser.add_argument('--num-tokens', type=int, help='num_tokens ', default=16)
     parser.add_argument('--nn-hidden-dim', type=int, help='hidden_dim of fully connected neural network', default=100)
-    parser.add_argument('--gru-output-dim', type=int, help='Output dimension of GRU layer', default=100)
     parser.add_argument('--dropout-prob', type=float, help="dropout rate", default=0.2)
 
     args = parser.parse_args()
@@ -63,5 +63,10 @@ if __name__ == '__main__':
         os.makedirs(save_serialization_dir)
 
     model.save_weights(os.path.join(save_serialization_dir, f'model.ckpt'))
+
+    # Save the used config
+    config_path = os.path.join(save_serialization_dir, "config.json")
+    with open(config_path, "w") as file:
+      json.dump(config, file)
 
     print(f"\nFinal model stored in serialization directory: {save_serialization_dir}")
