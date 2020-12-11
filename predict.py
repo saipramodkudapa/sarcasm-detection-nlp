@@ -11,8 +11,8 @@ import tensorflow as tf
 from tensorflow.keras import models
 
 # project imports
-from data import read_instances, load_vocabulary, index_instances, generate_batches, bert_index_instances, \
-    ids_labels_from_instances
+from data import read_instances, load_vocabulary, index_instances, \
+    generate_batches, bert_index_instances, ids_labels_from_instances
 from util import load_pretrained_model
 
 
@@ -24,6 +24,7 @@ def predict(model: models.Model,
     """
     Makes predictions using model on instances and saves them in save_to_file.
     """
+    # for BERT, use the finetuned BERT model to make predictions
     if is_bert:
         test_ids, test_labels = ids_labels_from_instances(instances)
         test_preds = model.predict(test_ids, batch_size=batch_size)
@@ -31,6 +32,7 @@ def predict(model: models.Model,
         all_predicted_labels = tf.reshape(all_predicted_labels, -1)
         all_predicted_labels = list(all_predicted_labels.numpy())
 
+    # for GloVe embedding based models, use trained model to make predictions
     else:
         batches = generate_batches(instances, batch_size)
         predicted_labels = []
@@ -43,6 +45,7 @@ def predict(model: models.Model,
             predicted_labels = list(tf.argmax(logits, axis=-1).numpy())
             all_predicted_labels += predicted_labels
 
+    # save the predictions file at the given file path
     if save_to_file:
         print(f"Saving predictions to filepath: {save_to_file}")
         with open(save_to_file, "w") as file:
@@ -80,7 +83,7 @@ if __name__ == '__main__':
         config = json.load(file)
 
     is_bert = False
-    if config['type'] == 'cnn' or config['type'] == 'cnn_gru':
+    if config['type'] == 'CNN' or config['type'] == 'CNN_BiGRU':
         vocabulary_path = os.path.join(args.load_serialization_dir, "vocab.txt")
         vocab_token_to_id, _ = load_vocabulary(vocabulary_path)
         instances = index_instances(instances, vocab_token_to_id)

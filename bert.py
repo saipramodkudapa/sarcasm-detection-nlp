@@ -1,7 +1,8 @@
+# internal imports
 from data import read_instances, ids_labels_from_instances, bert_index_instances
 from model import create_bert_cnn_model, create_vanilla_bert_model
 
-
+# external imports
 import argparse
 import os
 import tensorflow as tf
@@ -33,6 +34,7 @@ if __name__ == '__main__':
     print("Reading validation instances.")
     validation_instances = read_instances(args.validation_data_file_path, args.num_tokens)
 
+    # index tokens based on bert model vocab using huggingface transformers library
     train_instances = bert_index_instances(train_instances)
     validation_instances = bert_index_instances(validation_instances)
     config = {
@@ -40,6 +42,7 @@ if __name__ == '__main__':
         "nn_hidden_dim": args.nn_hidden_dim,
         "dropout_prob": args.dropout_prob}
 
+    # based on model choice, build config and instantiate model
     if args.model_choice == "bert":
         model = create_vanilla_bert_model(**config)
         config["type"] = "BERT"
@@ -51,20 +54,24 @@ if __name__ == '__main__':
         model = create_vanilla_bert_model(**config)
         config["type"] = "BERT"
 
+    # compile model before training, accuracy as metric, and binary_crossentropy loss for optimization
     model.compile(tf.keras.optimizers.Adam(1e-5), loss='binary_crossentropy', metrics=['accuracy'])
     model.summary()
     train_ids, train_labels = ids_labels_from_instances(train_instances)
     val_ids, val_labels = ids_labels_from_instances(validation_instances)
-    model_history = model.fit(x=train_ids, y=train_labels, epochs=args.num_epochs, verbose=1, batch_size=args.batch_size,
-                        validation_data=(val_ids, val_labels))
+    # initiate training process
+    model_history = model.fit(x=train_ids, y=train_labels, epochs=args.num_epochs, verbose=1, batch_size=args.batch_size
+                              , validation_data=(val_ids, val_labels))
 
+    # save model in serialization_dir under correct experiment name as taken through argument
     save_serialization_dir = os.path.join("serialization_dirs", args.experiment_name)
     if not os.path.exists(save_serialization_dir):
         os.makedirs(save_serialization_dir)
 
+    # save model weights
     model.save_weights(os.path.join(save_serialization_dir, f'model.ckpt'))
 
-    # Save the used config
+    # Save config used to build model
     config_path = os.path.join(save_serialization_dir, "config.json")
     with open(config_path, "w") as file:
       json.dump(config, file)

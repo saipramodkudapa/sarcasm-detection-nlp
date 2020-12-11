@@ -49,7 +49,7 @@ def train(model: models.Model,
             with tf.GradientTape() as tape:
                 logits = model(**batch_inputs, training=True)["logits"]
                 loss_value = cross_entropy_loss(logits, batch_labels)
-                ### Regularisation
+                # Regularisation
                 regularization_lambda = 1e-4
                 parameters = model.trainable_variables
                 l2_norm = tf.add_n([ tf.nn.l2_loss(each) for each in parameters ])
@@ -88,7 +88,9 @@ def train(model: models.Model,
         validation_accuracy = total_correct_predictions/total_predictions
 
         f1 = f1_score(total_labels, total_preds)
-        print(f"Validation F1 score: {round(float(f1), 4)}")
+        avg_f1 = f1_score(total_labels, total_preds, average='macro')
+        print(f"Validation F1 score for Sarcastic: {round(float(f1), 4)}")
+        print(f"Validation Avg F1 score: {round(float(avg_f1), 4)}")
 
         if validation_accuracy > best_epoch_validation_accuracy:
             print("Model with best validation accuracy so far: %.2f. Saving the model."
@@ -109,7 +111,8 @@ def train(model: models.Model,
                "training_accuracy": float(training_accuracy),
                "best_epoch_validation_accuracy": float(best_epoch_validation_accuracy),
                "best_epoch_validation_loss": float(best_epoch_validation_loss),
-               "epoch_validation_F1_score": round(float(f1), 4)
+               "epoch_validation_F1_score": round(float(f1), 4),
+               "epoch_validation_avg_F1_score": round(float(avg_f1), 4)
                }
 
     print("Best epoch validation accuracy: %.4f, validation loss: %.4f"

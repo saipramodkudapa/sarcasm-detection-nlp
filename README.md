@@ -130,12 +130,24 @@ Once the predictions are generated you can evaluate the accuracy and F1 score by
 python evaluate.py data/test.jsonl predictions/cnn_gru.txt
 ```
 
+
 ### Software Requirements:
 
 All the libraries required to run the code are mentioned in requirements.txt which can be used to setup the runnable enviroment. 
 
-NOTE - Training the bert based models require GPU for speed. Average time per epoch on CPU may take longer than 25 minutes depending on the system hardware. On Google colab, per epoch time was around 1-2 minutes per epoch.
+NOTE - Fine tuning the pretrained bert models may require GPU. Average time per epoch on CPU may take longer than 25 minutes depending on the system hardware. On Google colab - GPU, per epoch time was ~ 100 seconds
 
 - tensorflow V2.3.0
 - Spacy
 - nltk
+
+
+### List of modified files:
+
+- train.py
+- bert.py
+- model.py
+- predict.py
+- evaluate.py
+- util.py
+- loss.py

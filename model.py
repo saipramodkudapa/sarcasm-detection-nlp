@@ -10,19 +10,21 @@ from transformers import logging
 logging.set_verbosity_error()
 
 
+# base CNN model used by both only_CNN and CNN_GRU models
 class baseCNNmodel(models.Model):
     def __init__(self,
                  embedding_dim: int,
                  filters: List[int],
                  out_channels: int
                  ):
-      super(baseCNNmodel, self).__init__()
+        super(baseCNNmodel, self).__init__()
 
-      self.filters = filters
-      self.out_channels = out_channels
-      self.conv1 = layers.Convolution2D(filters=out_channels, kernel_size=[filters[0], embedding_dim], activation='relu')
-      self.conv2 = layers.Convolution2D(filters=out_channels, kernel_size=[filters[1], embedding_dim], activation='relu')
-      self.conv3 = layers.Convolution2D(filters=out_channels, kernel_size=[filters[2], embedding_dim], activation='relu')
+        # define the three convolutional layers with respective filter sizes
+        self.filters = filters
+        self.out_channels = out_channels
+        self.conv1 = layers.Convolution2D(filters=out_channels, kernel_size=[filters[0], embedding_dim], activation='relu')
+        self.conv2 = layers.Convolution2D(filters=out_channels, kernel_size=[filters[1], embedding_dim], activation='relu')
+        self.conv3 = layers.Convolution2D(filters=out_channels, kernel_size=[filters[2], embedding_dim], activation='relu')
 
     def call(self,
              conv_input: tf.Tensor):
@@ -30,6 +32,8 @@ class baseCNNmodel(models.Model):
         _, max_tokens, _, _ = conv_input.shape
         conv1_output = self.conv1(conv_input)
 
+        # number of window slides = max_tokens - (self.filters[0] - 1)
+        # Pool on the second dimension having
         max_pooled_output_1 = tf.nn.max_pool(conv1_output, ksize=[1, max_tokens - (self.filters[0] - 1), 1, 1],
                                              strides=[1, 1, 1, 1], padding='VALID')
 
@@ -79,7 +83,6 @@ class onlyCNNmodel(models.Model):
         batch_size, max_tokens = inputs.shape
         word_embed = tf.nn.embedding_lookup(self._embeddings, inputs)
 
-        # num_slides = max_tokens - (self.filters[0] - 1)
         conv_input = tf.reshape(word_embed, [batch_size, max_tokens, self.embedding_dim, 1])
 
         cnns_concat_output =  self._baseCNN(conv_input)

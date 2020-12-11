@@ -7,7 +7,7 @@ from sklearn.metrics import f1_score
 
 def evaluate(gold_data_path: str, prediction_data_path: str):
     """
-    Evaluates accuracy of label predictions in ``prediction_data_path``
+    Evaluates accuracy and F1 score of label predictions in ``prediction_data_path``
     based on gold labels in ``gold_data_path``.
     """
     with open(gold_data_path) as file:
@@ -23,10 +23,12 @@ def evaluate(gold_data_path: str, prediction_data_path: str):
 
     correct_count = sum([1.0 if predicted_label == gold_label else 0.0
                          for predicted_label, gold_label in zip(predicted_labels, gold_labels)])
+
     f1 = f1_score(gold_labels, predicted_labels)
+    macro_avg_f1 = f1_score(gold_labels, predicted_labels, average='macro')
     total_count = len(predicted_labels)
     _accuracy = correct_count / total_count
-    return _accuracy, f1
+    return _accuracy, f1, macro_avg_f1
 
 
 if __name__ == '__main__':
@@ -37,6 +39,7 @@ if __name__ == '__main__':
                         help='predictions data file path.')
 
     args = parser.parse_args()
-    accuracy, f1 = evaluate(args.gold_data_path, args.prediction_data_path)
+    accuracy, f1, avg_f1 = evaluate(args.gold_data_path, args.prediction_data_path)
     print(f"Accuracy: {round(accuracy, 2)}")
-    print(f"F1 score: {round(f1, 2)}")
+    print(f"F1 score for sarcastic class: {round(f1, 2)}")
+    print(f"Average F1 score: {round(avg_f1, 2)}")

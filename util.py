@@ -24,7 +24,7 @@ def load_pretrained_model(serialization_dir: str) -> models.Model:
     with open(config_path, "r") as file:
         config = json.load(file)
 
-    # Load Model
+    # Load Model based on model type
     model_name = config.pop("type")
     if model_name == "CNN":
         # To prevent circular imports

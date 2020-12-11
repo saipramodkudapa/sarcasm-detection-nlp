@@ -5,18 +5,18 @@ import json
 import os
 import zipfile
 import re
-# from util import stop, contractions
+
 
 # external lib imports:
+import tensorflow as tf
 from transformers import BertTokenizer
 import numpy as np
 from tqdm import tqdm
 import spacy
+from nltk.corpus import stopwords
 from bs4 import BeautifulSoup
 import nltk
 nltk.download('stopwords')
-from nltk.corpus import stopwords
-import tensorflow as tf
 
 nlp = spacy.load("en_core_web_sm", disable=['ner', 'tagger', 'parser', 'textcat'])
 
@@ -49,8 +49,13 @@ def read_instances(data_file_path: str,
     return instances
 
 
-# Removing the noise in text
 def clean_text(text):
+    """
+    Removing noise in input text by
+    - extracting text from html,
+    - remove stop words
+    - remove special chars
+    """
     soup = BeautifulSoup(text, "html.parser")
     stop = set(stopwords.words('english'))
     text = soup.get_text()
@@ -194,6 +199,7 @@ def index_instances(instances: List[Dict], token_to_id: Dict) -> List[Dict]:
         instance.pop("text_tokens")
     return instances
 
+
 def bert_index_instances(instances: List[Dict]) -> List[Dict]:
     """
     bert indexing for training instances
@@ -215,13 +221,18 @@ def bert_index_instances(instances: List[Dict]) -> List[Dict]:
         instance.pop("text_tokens")
     return instances
 
-def ids_labels_from_instances(instances: List[Dict]) -> List[Dict]:
+
+def ids_labels_from_instances(instances: List[Dict]):
+    """
+    extracts inputs, labels from instances
+    """
     labels = []
     ids = []
     for instance in instances:
         ids.append(instance['text_tokens_ids'])
         labels.append(instance['labels'])
-    return (tf.convert_to_tensor(ids), tf.convert_to_tensor(labels))
+    return tf.convert_to_tensor(ids), tf.convert_to_tensor(labels)
+
 
 def generate_batches(instances: List[Dict], batch_size) -> List[Dict[str, np.ndarray]]:
     """
