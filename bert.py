@@ -55,7 +55,7 @@ if __name__ == '__main__':
     model.summary()
     train_ids, train_labels = ids_labels_from_instances(train_instances)
     val_ids, val_labels = ids_labels_from_instances(validation_instances)
-    history = model.fit(x=train_ids, y=train_labels, epochs=args.num_epochs, verbose=1, batch_size=args.batch_size,
+    model_history = model.fit(x=train_ids, y=train_labels, epochs=args.num_epochs, verbose=1, batch_size=args.batch_size,
                         validation_data=(val_ids, val_labels))
 
     save_serialization_dir = os.path.join("serialization_dirs", args.experiment_name)
