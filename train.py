@@ -128,7 +128,7 @@ if __name__ == '__main__':
     parser.add_argument('--pretrained-embedding-file', type=str,
                         help='if passed, use glove embeddings to initialize the embedding matrix')
 
-    parser.add_argument('--model-choice', type=str, choices=("cnn", "cnn_gru"),
+    parser.add_argument('--model-choice', type=str, default='cnn', choices=("cnn", "cnn_gru"),
                         help='Choice of model')
 
     parser.add_argument('--experiment-name', type=str, default="default",

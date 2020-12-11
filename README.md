@@ -95,7 +95,7 @@ python train.py data/train.jsonl \
                   --pretrained-embedding-file data/glove.6B.100d.txt
 ```
 
-The output of this training is stored in its serialization directory. To prevent clashes, model directory name can be adjusted using `experiment-name` argument. The training script automatically generates serialization directory at the path `"serialization_dirs/{model_name}_{suffix_name}"`. So in this case, the serialization directory is `serialization_dirs/_cnn_attn_bigru`.
+The output of this training is stored in its serialization directory. To prevent clashes, model directory name can be adjusted using `experiment-name` argument. The training script automatically generates serialization directory at the path `"serialization_dirs/{model_name}_{experiment_name}"`. So in this case, the serialization directory is `serialization_dirs/_cnn_attn_bigru`.
 
 Similarly, to train bert based model, use following command:
 
